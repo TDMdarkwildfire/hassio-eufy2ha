@@ -1,6 +1,6 @@
 name: eufy2ha Bridge
 description: Polling-based motion detection + thumbnails for Eufy cameras (push-free) via eufy-security-ws and MQTT
-version: "0.1.0"
+version: "0.1.1"
 slug: "eufy2ha_bridge"
 url: https://github.com/TDMdarkwildfire/hassio-eufy2ha
 init: false

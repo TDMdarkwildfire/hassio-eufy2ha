@@ -92,6 +92,7 @@ class Bridge:
 
     # -- main loop --------------------------------------------------------
     def run_once(self) -> None:
+        self.mqtt.mark_online()   # self-heal a stale retained 'offline'
         data = self._query_latest()
         for ev in self.detector.update(data):
             meta = self.cams.get(ev.device_sn)

@@ -32,8 +32,14 @@ class MqttBridge:
     def connect(self) -> None:
         self._client.connect(self._host, self._port, keepalive=60)
         self._client.loop_start()
-        self._client.publish(self._avail, "online", retain=True)
+        self.mark_online()
         self._connected = True
+
+    def mark_online(self) -> None:
+        """(Re)assert availability. Called on connect and every poll cycle so a
+        stale retained 'offline' (e.g. another instance's last-will, or a broker
+        restart) self-heals instead of stranding all entities as unavailable."""
+        self._client.publish(self._avail, "online", retain=True)
 
     # -- discovery --------------------------------------------------------
     def announce_camera(self, cam_key: str, cam_name: str) -> None:
