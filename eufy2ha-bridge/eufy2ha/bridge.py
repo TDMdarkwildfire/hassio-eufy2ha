@@ -16,7 +16,10 @@ import socket
 import sys
 import time
 
+from .concierge import Concierge
 from .detector import MotionDetector
+from .go2rtc import Go2rtc
+from .ha_client import HaClient
 from .mqtt_bridge import MqttBridge
 from .ws_client import EufyWS
 
@@ -37,6 +40,18 @@ class Bridge:
         self.mqtt: MqttBridge | None = None
         self._motion_off_at: dict[str, float] = {}
 
+        # concierge (live-view auto-idle) — optional
+        self.concierge_enabled = bool(cfg.get("concierge_enabled", False)) and bool(cfg.get("ha_token"))
+        self.concierge_interval = cfg.get("concierge_interval", 3)
+        self._cc_streams = {                      # cam key -> [go2rtc stream names]
+            meta["key"]: [sn] + ([meta["entity"]] if meta.get("entity") else [])
+            for sn, meta in self.cams.items()
+        }
+        self._cc_entity = {meta["key"]: meta.get("entity") for meta in self.cams.values()}
+        self.go2rtc: Go2rtc | None = None
+        self.ha: HaClient | None = None
+        self.concierge = Concierge(cfg.get("concierge_grace_seconds", 10))
+
     # -- setup ------------------------------------------------------------
     def start(self) -> None:
         self.ws = EufyWS(self.cfg["ws_host"], self.cfg.get("ws_port", 3000))
@@ -46,7 +61,32 @@ class Bridge:
         for sn, meta in self.cams.items():
             self.mqtt.announce_camera(meta["key"], meta["name"])
         self._seed_baseline()
+        if self.concierge_enabled:
+            self.go2rtc = Go2rtc(self.cfg["go2rtc_url"])
+            self.ha = HaClient(self.cfg["ha_url"], self.cfg["ha_token"])
+            print(f"[{_now_iso()}] concierge on: grace {self.concierge.grace}s", flush=True)
         print(f"[{_now_iso()}] bridge up: {len(self.cams)} cams, poll {self.poll}s", flush=True)
+
+    def concierge_tick(self) -> None:
+        if not self.concierge_enabled:
+            return
+        # viewers from go2rtc consumers; "live" (P2P running) from the HA camera
+        # entity state — the go2rtc producer only turns real on-demand, but the
+        # eufy integration marks camera.<x> "streaming" whenever P2P is up.
+        viewers = self.go2rtc.states(self._cc_streams)
+        if not viewers:
+            return
+        states: dict[str, tuple[bool, int]] = {}
+        for cam, (_, v) in viewers.items():
+            entity = self._cc_entity.get(cam)
+            live = bool(entity) and self.ha.get_state(entity) == "streaming"
+            states[cam] = (live, v)
+        import time as _t
+        for cam in self.concierge.evaluate(states, _t.time()):
+            entity = self._cc_entity.get(cam)
+            if entity and self.ha.stop_p2p(entity):
+                print(f"[{_now_iso()}] concierge: {cam} 0 Zuschauer -> P2P gestoppt ({entity})",
+                      flush=True)
 
     def _seed_baseline(self) -> None:
         data = self._query_latest(timeout=15)
@@ -120,14 +160,20 @@ class Bridge:
 
     def run(self) -> None:
         self.start()
+        tick = max(1, self.concierge_interval if self.concierge_enabled else self.poll)
+        last_detect = 0.0
         while True:
+            now = time.time()
             try:
-                self.run_once()
+                if now - last_detect >= self.poll:
+                    last_detect = now
+                    self.run_once()
+                self.concierge_tick()
             except (ConnectionError, OSError) as e:
                 print(f"[{_now_iso()}] WS error: {e}; reconnect in 5s", flush=True)
                 time.sleep(5)
                 self.ws = EufyWS(self.cfg["ws_host"], self.cfg.get("ws_port", 3000))
-            time.sleep(self.poll)
+            time.sleep(tick)
 
 
 def load_config() -> dict:
@@ -136,9 +182,11 @@ def load_config() -> dict:
     cfg = json.load(open(path)) if os.path.exists(path) else {}
     # env overrides for secrets
     for env, key in (("MQTT_USERNAME", "mqtt_user"), ("MQTT_PASSWORD", "mqtt_pass"),
-                     ("MQTT_BROKER", "mqtt_host")):
+                     ("MQTT_BROKER", "mqtt_host"), ("HA_URL", "ha_url")):
         if os.environ.get(env):
             cfg[key] = os.environ[env]
+    # HA token: add-on supervisor token or dev token
+    cfg["ha_token"] = os.environ.get("SUPERVISOR_TOKEN") or os.environ.get("HA_TOKEN", "")
     return cfg
 
 

@@ -1,6 +1,6 @@
 name: eufy2ha Bridge
-description: Polling-based motion detection + thumbnails for Eufy cameras (push-free) via eufy-security-ws and MQTT
-version: "0.1.1"
+description: Polling-based motion detection + thumbnails + live-view auto-idle for Eufy cameras (push-free)
+version: "0.2.0"
 slug: "eufy2ha_bridge"
 url: https://github.com/TDMdarkwildfire/hassio-eufy2ha
 init: false
@@ -10,6 +10,7 @@ arch:
 host_network: true
 startup: application
 boot: auto
+homeassistant_api: true
 services:
   - mqtt:want
 options:
@@ -18,17 +19,27 @@ options:
   homebase_sn: ""
   poll_interval: 10
   motion_reset_seconds: 30
+  go2rtc_url: "http://127.0.0.1:1984"
+  concierge_enabled: true
+  concierge_grace_seconds: 10
+  concierge_interval: 3
   cameras:
     - serial: ""
       key: ""
       name: ""
+      entity: ""
 schema:
   ws_host: str
   ws_port: port
   homebase_sn: str
   poll_interval: int(2,600)
   motion_reset_seconds: int(5,600)
+  go2rtc_url: str
+  concierge_enabled: bool
+  concierge_grace_seconds: int(3,300)
+  concierge_interval: int(1,60)
   cameras:
     - serial: str
       key: str
       name: str
+      entity: str?
