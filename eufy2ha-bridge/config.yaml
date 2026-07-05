@@ -1,0 +1,34 @@
+name: eufy2ha Bridge
+description: Polling-based motion detection + thumbnails for Eufy cameras (push-free) via eufy-security-ws and MQTT
+version: "0.1.0"
+slug: "eufy2ha_bridge"
+url: https://github.com/TDMdarkwildfire/hassio-eufy2ha
+init: false
+arch:
+  - aarch64
+  - amd64
+host_network: true
+startup: application
+boot: auto
+services:
+  - mqtt:want
+options:
+  ws_host: "127.0.0.1"
+  ws_port: 3000
+  homebase_sn: ""
+  poll_interval: 10
+  motion_reset_seconds: 30
+  cameras:
+    - serial: ""
+      key: ""
+      name: ""
+schema:
+  ws_host: str
+  ws_port: port
+  homebase_sn: str
+  poll_interval: int(2,600)
+  motion_reset_seconds: int(5,600)
+  cameras:
+    - serial: str
+      key: str
+      name: str
