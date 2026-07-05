@@ -52,6 +52,10 @@ class Bridge:
         self.ha: HaClient | None = None
         self.concierge = Concierge(cfg.get("concierge_grace_seconds", 10))
 
+        # mobile notification on motion (optional; needs HA API)
+        self.notify_service = cfg.get("notify_service", "")
+        self.notify_enabled = bool(self.notify_service) and bool(cfg.get("ha_token"))
+
     # -- setup ------------------------------------------------------------
     def start(self) -> None:
         self.ws = EufyWS(self.cfg["ws_host"], self.cfg.get("ws_port", 3000))
@@ -61,11 +65,27 @@ class Bridge:
         for sn, meta in self.cams.items():
             self.mqtt.announce_camera(meta["key"], meta["name"])
         self._seed_baseline()
+        if self.concierge_enabled or self.notify_enabled:
+            self.ha = HaClient(self.cfg["ha_url"], self.cfg["ha_token"])
         if self.concierge_enabled:
             self.go2rtc = Go2rtc(self.cfg["go2rtc_url"])
-            self.ha = HaClient(self.cfg["ha_url"], self.cfg["ha_token"])
             print(f"[{_now_iso()}] concierge on: grace {self.concierge.grace}s", flush=True)
+        if self.notify_enabled:
+            print(f"[{_now_iso()}] notify on: {self.notify_service}", flush=True)
         print(f"[{_now_iso()}] bridge up: {len(self.cams)} cams, poll {self.poll}s", flush=True)
+
+    def _notify_motion(self, key: str, name: str) -> None:
+        if not self.notify_enabled:
+            return
+        image_entity = f"image.{key}_eufy2ha_letztes_event"
+        picture = self.ha.get_entity_picture(image_entity)  # signed /api/image_proxy URL
+        data = {"tag": f"eufy2ha_{key}", "group": "eufy2ha"}
+        if picture:
+            data["image"] = picture
+        ok = self.ha.notify(self.notify_service, f"Bewegung: {name}",
+                            "Bewegung erkannt", data)
+        if ok:
+            print(f"    notify -> {self.notify_service}", flush=True)
 
     def concierge_tick(self) -> None:
         if not self.concierge_enabled:
@@ -151,6 +171,7 @@ class Bridge:
                     print(f"    thumbnail {len(jpeg)} bytes -> HA", flush=True)
                 else:
                     print("    thumbnail download failed", flush=True)
+            self._notify_motion(key, meta["name"])
         # auto-reset motion binary_sensors
         now = time.time()
         for key, off_at in list(self._motion_off_at.items()):

@@ -1,6 +1,6 @@
 name: eufy2ha Bridge
 description: Polling-based motion detection + thumbnails + live-view auto-idle for Eufy cameras (push-free)
-version: "0.2.0"
+version: "0.3.0"
 slug: "eufy2ha_bridge"
 url: https://github.com/TDMdarkwildfire/hassio-eufy2ha
 init: false
@@ -23,6 +23,7 @@ options:
   concierge_enabled: true
   concierge_grace_seconds: 10
   concierge_interval: 3
+  notify_service: ""
   cameras:
     - serial: ""
       key: ""
@@ -38,6 +39,7 @@ schema:
   concierge_enabled: bool
   concierge_grace_seconds: int(3,300)
   concierge_interval: int(1,60)
+  notify_service: str?
   cameras:
     - serial: str
       key: str
