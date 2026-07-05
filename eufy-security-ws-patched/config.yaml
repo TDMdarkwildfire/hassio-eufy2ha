@@ -1,6 +1,6 @@
 name: eufy-security-ws (patched)
 description: bropat/eufy-security-ws 3.1.0 + raw "push message" event for clip-download bridges (eufy2ha)
-version: "3.1.0-p2"
+version: "3.1.0-p3"
 slug: "eufy_security_ws_patched"
 url: https://github.com/TDMdarkwildfire/hassio-eufy2ha
 init: false
